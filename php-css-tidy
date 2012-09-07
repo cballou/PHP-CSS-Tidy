@@ -1,0 +1,221 @@
+#!/usr/bin/php
+<?php
+/**
+ * A PHP class implementing regular expressions for combining and compressing
+ * CSS files. Only minor changes were made to this script; namely changing it
+ * to a bash executable and adding the ability to leave rules separated by line.
+ * Also, it's worth noting that this script echoes the resulting CSS. To properly
+ * install, you need to move this script to globally executable path, i.e. /usr/bin/
+ * or /usr/local/bin/. Then, you need to give it execute permissions via:
+ *
+ *   chmod +x php-css-tidy
+ * 
+ *
+ * Full credit goes to the original author, JR. His blog post and
+ * additional documentation on this class can be found at:
+ *
+ * http://www.if-not-true-then-false.com/2009/css-compression-with-own-php-class-vs-csstidy/
+ */
+class CSSMin {
+	
+	/**
+	 * Whether you want to output CSS on a single line or multiple lines. This
+	 * must be manually changed by you depending on your preference.
+	 */
+	private $_multi_line = FALSE;
+	
+	/**
+	 * The original CSS.
+	 * @var string
+	 */
+	private $original_css;
+	
+	/**
+	 * The compressed CSS.
+	 * @var string
+	 */
+	private $compressed_css;
+	
+	/**
+	 * An array of files to compress.
+	 * @var	array
+	 */
+	private $files = array();
+
+	/**
+	 * Default constructor
+	 *
+	 * @access	public
+	 * @param	null|string		$original_css
+	 * @return	void
+	 */
+	public function __construct($original_css)
+	{
+		if (!empty($original_css)) {
+			$this->original_css = $original_css;
+		}
+	}
+
+	/**
+	 * Add a file to be compressed. Only accepts full paths to files.
+	 *
+	 * @access	public
+	 * @param	string	$file
+	 * @return	bool
+	 */
+	public function addFile($file = null) {
+		if ($file != null && $file != "" && 
+			substr(strrchr($file, '.'), 1) == "css" && is_file($file)) {
+			$this->files[] = $file;
+			
+			return true;
+		}
+		
+		return false;
+	}
+
+	/* Add multiple files array */
+	/**
+	 * Handles adding multiples files for compression. Each string in the array
+	 * must be a full path to the file.
+	 *
+	 * @access	public
+	 * @param	array|null	$files
+	 * @return	bool
+	 */
+	public function addFiles($files = null)
+	{
+		$ok = true;
+		$files = (array) $files;
+		foreach ($files as $file) {
+			if (!$this->addFile($file)) {
+				$ok = false;
+			}
+		}
+		
+		return $ok;
+	}
+	
+	/**
+	 * Prints the original CSS files concatenated. Optionally allows for
+	 * adding the appropriate text/css content type header.
+	 *
+	 * @access	public
+	 * @param	bool	$add_header
+	 * @return	void
+	 */
+	public function printOriginalCSS($add_header = false)
+	{
+		if ($add_header) {
+			header('Content-type: text/css');
+		}
+		
+		echo $this->original_css;
+	}
+
+	/**
+	 * Prints the compressed CSS files concatenated. Optionally allows for
+	 * adding the appropriate text/css content type header.
+	 *
+	 * @access	public
+	 * @param	bool	$add_header
+	 * @return	void
+	 */
+	public function printCompressedCSS($add_header = false)
+	{
+		if ($add_header) {
+			header('Content-type: text/css');
+		}
+		
+		echo $this->compressed_css;
+	}
+
+	/**
+	 * Used to generate the concatenated version of the original CSS files.
+	 *
+	 * @access	public
+	 * @return	void
+	 */
+	public function setOriginalCSS()
+	{
+		foreach ($this->files as $file) {
+			$fh = fopen($file, 'r');
+			$this->original_css .= fread($fh, filesize($file));
+			fclose($fh);
+		}
+	}
+
+	/**
+	 * Handles compressing all included CSS files that have already been
+	 * concatenated.
+	 *
+	 * @access	public
+	 * @return	void
+	 */
+	public function compressCSS()
+	{
+		$patterns = array();
+		$replacements = array();
+
+		// remove multi-line comments
+		$patterns[] = '/\/\*.*?\*\//s';
+		$replacements[] = '';
+
+		// remove multiple newlines
+		$patterns[] = '/\n+|\r+/';
+		$replacements[] = "\n";
+		
+		// remove tabs
+		$patterns[] = '/\t/';
+		$replacements[] = ' ';
+		
+		// remove tabs, spaces, newlines, etc
+		$patterns[] = '/\r\n|\r|\n|\t|\s\s+/';
+		$replacements[] = '';
+
+		// remove whitespace on both sides of colons
+		$patterns[] = '/\s?\:\s?/';
+		$replacements[] = ':';
+
+		// remove whitespace on both sides of curly brackets
+		$patterns[] = '/\s?\{\s?/';
+		$replacements[] = '{';
+		$patterns[] = '/\s?\}\s?/';
+		$replacements[] = '}';
+
+		// remove whitespace on both sides of commas
+		$patterns[] = '/\s?\,\s?/';
+		$replacements[] = ',';
+		
+		// add newlines back in
+		if ($this->_multi_line === TRUE) {
+			$patterns[] = '/\}/';
+			$replacements[] = "}\n";
+		}
+
+		// given all regex rules, perform the compression
+		$this->compressed_css = preg_replace($patterns, $replacements, $this->original_css);
+	}
+}
+
+/**
+ * Any code below is for the purpose of utilization via the command line and Komodo IDE.
+ */
+
+// get all STDIN
+$f = fopen('php://stdin', 'r');
+$css = '';
+while ($line = fgets($f)) {
+    $css .= $line;
+}
+fclose($f);
+
+// TODO: check if we have one or multiple files
+
+// load the class, add the file(s), concat the files, compress, and output
+$cssmin = new CSSMin();
+$cssmin->addFile($arv[1]);
+$cssmin->setOriginalCSS();
+$cssmin->compressCSS();
+$cssmin->printCompressedCSS();
+exit;
